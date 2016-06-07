@@ -1,16 +1,18 @@
-# botbuster
+# botbuster.py
 Automated banning of twitch chat bots based on account creation date.
 
 #Installation
 
 Requires python. I know it will work with 3.5 and 3.4. I think some of the dictionary handling is incompatible with 2.7.
 Tested on Windows, should work on *NIX environments too.
+
 https://www.python.org/downloads/
 
 Modules used: socket, time, re, requests, json
 
-If these don't come standard in your python installation, they can be installed by opening cmd or terminal and typing:
-pip install requests
+If some of these don't come standard in your python installation, they can be installed by opening cmd or terminal and typing:
+
+```pip install requests json```
 
 Download the botbuster.py and open with a text editor to configure authentication and channel.
 
