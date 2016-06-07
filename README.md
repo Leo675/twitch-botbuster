@@ -41,7 +41,7 @@ In your twitch channel you should see your bot user say 'Reporting for duty!'
 ###Commands
 All commands are accessible to anyone in the channel that are moderators.
 
-#####!blacklist <username>
+#####!blacklist username
 This will automatically look up the creation date of a user and blacklist it. This is the recommended method so you don't have to worry about time zones. BTTV uses your local time zone and my bot just uses the GMT value twitch provides.
 
 #####!startbans
@@ -50,7 +50,7 @@ This command will start the ban loops. It loops through each user in the room ch
 #####!stopbans
 This stops banning users and clears the blacklisted date list
 
-#####!whitelist <username>
+#####!whitelist username
 This command will prevent a user from being banned by the bot and also send the unban command for convenience. 
 
 #####!bld YYYY-MM-DD
