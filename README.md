@@ -39,7 +39,7 @@ run botbuster.py
 In your twitch channel you should see your bot user say 'Reporting for duty!'
 
 ###Commands
-All commands are accessible to anyone in the channel that are moderators.
+All commands are useable by channel moderators.
 
 #####!blacklist username
 This will automatically look up the creation date of a user and blacklist it. This is the recommended method so you don't have to worry about time zones. BTTV uses your local time zone and my bot just uses the GMT value twitch provides.
