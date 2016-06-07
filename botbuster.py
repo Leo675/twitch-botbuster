@@ -1,7 +1,7 @@
 #! python3
 # -*- coding: utf-8 -*-
-#Author: daytona_675 aka IDSninja
-#https://www.twitch.tv/daytona_675
+# Author: daytona_675 aka IDSninja
+# https://www.twitch.tv/daytona_675
 
 from __future__ import print_function
 import socket
@@ -10,35 +10,44 @@ import re
 import requests
 import json
 
-#The twitch user which will be acting as your bot
+# The twitch user which will be acting as your bot
 chat_user = ''
 
-#The oauth password for the twitch user which will be operating
-#Obtain this value by visiting this page while logged in as your bot user: http://www.twitchapps.com/tmi/
-#example: 
+# The oauth password for the twitch user which will be operating
+# Obtain this value by visiting this page while logged in
+# as your bot user: http://www.twitchapps.com/tmi/
+# example:
 chat_pass = 'oauth:abcdefghijklmnopqrst123456789z'
 
-#The channel the bot will be operating in (your channel's name)
+# The channel the bot will be operating in (your channel's name)
 chat_chan = 'daytona_675'
 
-#punishment method; change to timeout (or any word other than ban) to make it timeout instead of ban
+# punishment method; change to timeout (or any word other than ban)
+# to make it timeout instead of ban
 punishment = 'ban'
 
-#Twitch IRC server info: the host and port should not need to be changed
+# Twitch IRC server info: the host and port should not need to be changed
 chat_host = "irc.chat.twitch.tv"
 chat_port = 6667
 
-#List of commands which use regular expressions. Only change the left side and make sure to leave the ^
+# List of commands which use regular expressions.
+# Only change the left side and make sure to leave the ^
 commands = {
     '^!startbans': 'start_banning',
     '^!blacklist': 'blacklist_user',
     '^!bld': 'blacklist_date',
-    '^!unlist' : 'unlist_date',
+    '^!unlist': 'unlist_date',
     '^!whitelist': 'whitelist_user',
     '^!stopbans': 'stop_banning',
     }
 
-#Initial IRC socket connection and authentication
+# initialize variables
+banned_users = []
+whitelisted_users = []
+mitigation_active = False
+banned_dates = []
+
+# Initial IRC socket connection and authentication
 s = socket.socket()
 s.connect((chat_host, chat_port))
 s.send("PASS {}\r\n".format(chat_pass).encode("utf-8"))
@@ -47,171 +56,222 @@ s.send("CAP REQ :twitch.tv/membership\r\n".encode("utf-8"))
 s.send("JOIN #{}\r\n".format(chat_chan).encode("utf-8"))
 
 
-#Function for threaded asynchronous functions decorator @async
+# Function for threaded asynchronous functions decorator @async
 def async(func):
     from functools import wraps
+
     @wraps(func)
     def async_func(*args, **kwargs):
         from threading import Thread
-        f = Thread(target = func, args = args, kwargs = kwargs)
+        f = Thread(target=func, args=args, kwargs=kwargs)
         f.start()
         return
     return async_func
 
-#For sending messages to chat
+
+# For sending messages to chat
 def chat(sock, msg):
     sock.send(bytes('PRIVMSG #%s :%s\r\n' % (chat_chan, msg), 'UTF-8'))
 
-#For permabanning users
+
+# For permabanning users
 def ban(sock, user):
     chat(sock, "/ban {}".format(user))
 
+
 def unban(sock, user):
     chat(sock, "/unban {}".format(user))
-    
-#For timeout (seems to do 10 minutes)
+
+
+# For timeout (seems to do 10 minutes)
 def timeout(sock, user, secs=60):
     chat(sock, "/timeout {}".format(user, secs))
 
+
 def get_chatters():
-    #Loop ends when a value is returned
+    # Loop ends when a value is returned
     global admin_list
     while 1:
         chatter_list = ()
         admins = ()
-        #uses try because sometimes the connection times out
+        # uses try because sometimes the connection times out
         try:
-            r = requests.get('https://tmi.twitch.tv/group/user/{}/chatters'.format(chat_chan))
+            url_fmt = 'https://tmi.twitch.tv/group/user/{}/chatters'
+            r = requests.get(url_fmt.format(chat_chan))
         except:
             time.sleep(1)
             continue
         if r.status_code == 200:
             r = json.loads(r.text)
-            
-            #builds the list of chatters
+
+            # builds the list of chatters
             for chatter in r['chatters']['viewers']:
                 chatter_list += (chatter,)
-            
-            #Dynamic moderators list, kinda hackish but if you unmod someone they will be removed on the next loop
+
+            # Dynamic moderators list, kinda hackish but if you unmod
+            # someone they will be removed on the next loop
             for moderator in r['chatters']['moderators']:
                 admins += (moderator,)
             admin_list = admins
             return chatter_list
         time.sleep(1)
 
-#Function for returning the user's creation date
+
+# Function for returning the user's creation date
 def creation_date(user):
-    #Loop ends when a value is returned
+    # Loop ends when a value is returned
     while 1:
-        #Uses try in case of request timeout
+        # Uses try in case of request timeout
         try:
-            r = requests.get('https://api.twitch.tv/kraken/users/{}'.format(user))
+            url_fmt = 'https://api.twitch.tv/kraken/users/{}'
+            r = requests.get(url_fmt.format(user))
         except:
             time.sleep(1)
             continue
         if r.status_code == 200:
-            #Captures only YYYY-MM-DD
-            date = re.match('([\d]{4}-[\d]{2}-[\d]{2})', json.loads(r.text)['created_at'])
+            # Captures only YYYY-MM-DD
+            date = re.match(
+                '([\d]{4}-[\d]{2}-[\d]{2})',
+                json.loads(r.text)['created_at']
+             )
             return date.group(1)
-    
 
-#Thread for watching and banning chatters
+
+# Thread for watching and banning chatters
 @async
 def watch_chatters():
     global chatter_list
+
+    def punish(chatter):
+        if punishment == 'ban':
+            ban(s, chatter)
+            banned_users.append(chatter)
+            print('Banning {}'.format(chatter))
+
+        if punishment == 'timeout':
+            timeout(s, chatter)
+            print('TimingOut {}'.format(chatter))
+
     while 1:
-        #Gets the list of chatters in the room
-        chatter_list = get_chatters()
-        for chatter in chatter_list:
-            if mitigation_active and chatter not in banned_users and chatter not in whitelisted_users:
+        if mitigation_active:
+            # Gets the list of chatters in the room
+            chatter_list = get_chatters()
+            for chatter in chatter_list:
+                if chatter in whitelisted_users:
+                    continue
+
+                if chatter in banned_users:
+                    continue
+
                 if creation_date(chatter) in banned_dates:
-                    if punishment == 'ban':
-                        ban(s, chatter)
-                        banned_users.append(chatter)
-                    else:
-                        timeout(s, chatter)
-                    print('Banning {}'.format(chatter))
-                    print('Current number of banned users: {}'.format(str(len(banned_users))))
+                    punish(chatter)
+
+                msg_fmt = 'Current number of banned users: {!s}'
+                print(msg_fmt.format(len(banned_users)))
         time.sleep(15)
-    
-#Thread for reading chat and watching for user commands
+
+
+# Thread for reading chat and watching for user commands
 @async
 def read_chat():
-    #initialize variables
-    global banned_dates,banned_users,whitelisted_users,mitigation_active
-    banned_users = []
-    whitelisted_users = []
-    mitigation_active = 0
-    banned_dates = []
-    
-    #Starts infinite loop listening to the IRC server
+    # Starts infinite loop listening to the IRC server
     while True:
         response = s.recv(1024).decode("utf-8")
-        
-        #PONG replies to keep the connection alive
+
+        # PONG replies to keep the connection alive
         if response == "PING :tmi.twitch.tv\r\n":
             s.send("PONG :tmi.twitch.tv\r\n".encode("utf-8"))
+            continue
+
+        # separates user and message.
+        chat_object = re.search(r'^:(\w+)![^:]+:(.*)$', response)
+        if chat_object:
+            handle_chat(chat_object)
+
+
+def handle_chat(chat_object):
+    user = chat_object.group(1)
+    msg = chat_object.group(2)
+    global banned_dates, mitigation_active
+
+    if user not in admin_list:
+        return
+
+    # Processes possible commands from the command dictionary
+    for command, action in commands.items():
+        if not re.search(command, msg):
+            continue
+
+        method = 'cmd_{}'.format(action)
+        if callable(method):
+            method(command, msg)
+
+
+def cmd_blacklist_date(command, msg):
+    """adds date to the banned list
+    """
+    input = re.search('^'+command+'\s+([\d]{4}-[\d]{2}-[\d]{2})', msg)
+    if input:
+        banned_dates.append(input.group(1))
+    else:
+        chat(s, 'Error: invalid format. Use !bld YYYY-MM-DD')
+
+
+def cmd_unlist_date(command, msg):
+    """Manual unlisting of a date, can also !stopbans to clear the list
+    """
+    input = re.search('^'+command+'\s+([\d]{4}-[\d]{2}-[\d]{2})', msg)
+    if input:
+        banned_dates.remove(input.group(1))
+    else:
+        chat(s, 'Error: invalid format. !unlist YYYY-MM-DD')
+
+
+def cmd_blacklist_user(command, msg):
+    """Automatic lookup of a user's creation date blacklisting it.
+    """
+    global banned_dates, mitigation_active
+    target = re.search('^'+command+'\s*@?([\w\-]+)', msg)
+    if target:
+        # Makes sure the user is actually in
+        # the room to prevent erroneous bans.
+        if target.group(1).lower() in chatter_list:
+            user_date = creation_date(target.group(1).lower())
+            chat(s, 'Blacklisted: {}'.format(user_date))
+            banned_dates.append(user_date)
         else:
-            #separates user and message.
-            chat_object = re.search(r'^:(\w+)![^:]+:(.*)$', response)
-            if chat_object:
-                user = chat_object.group(1)
-                msg = chat_object.group(2)
-                #msg_time = int(time.time())
-                
-                #Processes possible commands from the command dictionary
-                for command,action in commands.items():
-                    if re.search(command, msg):
-                        #manual blacklisting of dates, uses GMT always
-                        if action == 'blacklist_date' and user in admin_list:
-                            input = re.search('^'+command+'\s+([\d]{4}-[\d]{2}-[\d]{2})', msg)
-                            if input:
-                                #adds date to the banned list
-                                banned_dates.append(input.group(1))
-                            else:
-                                chat(s, 'Error: invalid format. Use !bld YYYY-MM-DD')
-                            break   
-                        #Manual unlisting of a date, can also !stopbans to clear the list 
-                        elif action == 'unlist_date' and user in admin_list:
-                            input = re.search('^'+command+'\s+([\d]{4}-[\d]{2}-[\d]{2})', msg)
-                            if input:
-                                banned_dates.remove(input.group(1))
-                            else:
-                                chat(s, 'Error: invalid format. !unlist YYYY-MM-DD')
-                            break
-                        #Automatic lookup of a user's creation date blacklisting it.
-                        elif action == 'blacklist_user' and user in admin_list:
-                            target = re.search('^'+command+'\s*@?([\w\-]+)', msg)
-                            if target:
-                                #Makes sure the user is actually in the room to prevent erroneous bans.
-                                if target.group(1).lower() in chatter_list:
-                                    user_date = creation_date(target.group(1).lower())
-                                    chat(s, 'Blacklisted: {}'.format(user_date))
-                                    banned_dates.append(user_date)
-                                else:
-                                    chat(s, 'User {} not found in the room. Check spelling or try again in 15 seconds.'.format(target.group(1)))
-                            break
-                        #Stops bans and clears blacklist
-                        elif action == 'stop_banning' and user in admin_list:
-                            mitigation_active = 0
-                            banned_dates = []
-                            chat(s, 'Turning off chat mitigation.')
-                            break
-                        #Starts banning users
-                        elif action == 'start_banning' and user in admin_list:
-                            mitigation_active = 1
-                            chat(s, 'Turning on chat mitigation ═══█❚')
-                            break
-                        #unbans and prevents future banning of the user
-                        elif action == 'whitelist_user' and user in admin_list:
-                            target = re.search('^'+command+'\s*@?([\w\-]+)', msg)
-                            if target:
-                                chat(s, 'Whitelisting user: {}'.format(target.group(1)))
-                                whitelisted_users.append(target.group(1).lower())
-                                unban(s, target.group(1).lower())
-                            break
-                        
-       
+            msg_fmt = 'User {} not found in the room. ' + \
+                'Check spelling or try again in 15 seconds.'
+            chat(s, msg_fmt.format(target.group(1)))
+
+
+def cmd_stop_banning(command, msg):
+    """Stops bans and clears blacklist
+    """
+    global mitigation_active, banned_dates
+    mitigation_active = False
+    banned_dates = []
+    chat(s, 'Turning off chat mitigation.')
+
+
+def cmd_start_banning(command, msg):
+    """Starts banning users
+    """
+    global mitigation_active
+    mitigation_active = True
+    chat(s, 'Turning on chat mitigation ═══█❚')
+
+
+def cmd_whitelist_user(command, msg):
+    """unbans and prevents future banning of the user
+    """
+    target = re.search('^'+command+'\s*@?([\w\-]+)', msg)
+    if target:
+        chat(s, 'Whitelisting user: {}'.format(target.group(1)))
+        whitelisted_users.append(target.group(1).lower())
+        unban(s, target.group(1).lower())
+
+
 if __name__ == '__main__':
     chat(s, 'Reporting for duty!')
     watch_chatters()
