@@ -15,7 +15,7 @@ chat_user = ''
 
 #The oauth password for the twitch user which will be operating
 #Obtain this value by visiting this page while logged in as your bot user: http://www.twitchapps.com/tmi/
-#example: 
+#example:
 chat_pass = 'oauth:abcdefghijklmnopqrst123456789z'
 
 #The channel the bot will be operating in (your channel's name)
@@ -68,10 +68,10 @@ def ban(sock, user):
 
 def unban(sock, user):
     chat(sock, "/unban {}".format(user))
-    
+
 #For timeout (seems to do 10 minutes)
 def timeout(sock, user, secs=60):
-    chat(sock, "/timeout {}".format(user, secs))
+    chat(sock, "/timeout {:s} {:d}".format(user, secs))
 
 def get_chatters():
     #Loop ends when a value is returned
@@ -87,11 +87,11 @@ def get_chatters():
             continue
         if r.status_code == 200:
             r = json.loads(r.text)
-            
+
             #builds the list of chatters
             for chatter in r['chatters']['viewers']:
                 chatter_list += (chatter,)
-            
+
             #Dynamic moderators list, kinda hackish but if you unmod someone they will be removed on the next loop
             for moderator in r['chatters']['moderators']:
                 admins += (moderator,)
@@ -113,7 +113,7 @@ def creation_date(user):
             #Captures only YYYY-MM-DD
             date = re.match('([\d]{4}-[\d]{2}-[\d]{2})', json.loads(r.text)['created_at'])
             return date.group(1)
-    
+
 
 #Thread for watching and banning chatters
 @async
@@ -133,7 +133,7 @@ def watch_chatters():
                     print('Banning {}'.format(chatter))
                     print('Current number of banned users: {}'.format(str(len(banned_users))))
         time.sleep(15)
-    
+
 #Thread for reading chat and watching for user commands
 @async
 def read_chat():
@@ -143,11 +143,11 @@ def read_chat():
     whitelisted_users = []
     mitigation_active = 0
     banned_dates = []
-    
+
     #Starts infinite loop listening to the IRC server
     while True:
         response = s.recv(1024).decode("utf-8")
-        
+
         #PONG replies to keep the connection alive
         if response == "PING :tmi.twitch.tv\r\n":
             s.send("PONG :tmi.twitch.tv\r\n".encode("utf-8"))
@@ -158,7 +158,7 @@ def read_chat():
                 user = chat_object.group(1)
                 msg = chat_object.group(2)
                 #msg_time = int(time.time())
-                
+
                 #Processes possible commands from the command dictionary
                 for command,action in commands.items():
                     if re.search(command, msg):
@@ -170,8 +170,8 @@ def read_chat():
                                 banned_dates.append(input.group(1))
                             else:
                                 chat(s, 'Error: invalid format. Use !bld YYYY-MM-DD')
-                            break   
-                        #Manual unlisting of a date, can also !stopbans to clear the list 
+                            break
+                        #Manual unlisting of a date, can also !stopbans to clear the list
                         elif action == 'unlist_date' and user in admin_list:
                             input = re.search('^'+command+'\s+([\d]{4}-[\d]{2}-[\d]{2})', msg)
                             if input:
@@ -210,8 +210,8 @@ def read_chat():
                                 whitelisted_users.append(target.group(1).lower())
                                 unban(s, target.group(1).lower())
                             break
-                        
-       
+
+
 if __name__ == '__main__':
     chat(s, 'Reporting for duty!')
     watch_chatters()
