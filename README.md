@@ -3,7 +3,8 @@ Automated banning of twitch chat bots based on account creation date.
 
 #Installation
 
-Requires python. I know it will work with 3.5, probably will work with 3.4 too. Probably will work with 2.7 since I import the future print function in an attempt at compatability. Tested on windows, should work on *NIX environments too.
+Requires python. I know it will work with 3.5 and 3.4. I think some of the dictionary handling is incompatible with 2.7.
+Tested on Windows, should work on *NIX environments too.
 https://www.python.org/downloads/
 
 Modules used: socket, time, re, requests, json
