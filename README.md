@@ -28,3 +28,6 @@ http://www.twitchapps.com/tmi/
 
 ###chat_chan
 This is the name of your channel on twitch that the bot will be joining. For example, mine is daytona_675.
+
+###punishment
+This value sets if the bot bans or times users out. The value 'ban' will cause permanent bans, any other value will cause timeouts. 
