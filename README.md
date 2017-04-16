@@ -21,6 +21,8 @@ Download the botbuster.py and open with a text editor to configure authenticatio
 
 # Configuration
 
+Set these values in the config.ini file before running
+
 ### chat_user 
 Set this value to the twitch user name which your bot will use. You CAN use your channel user, but the bot will send messages as you.
 This user needs to be a mod in the channel which it will be protecting.
@@ -55,6 +57,9 @@ This stops banning users and clears the blacklisted date list
 
 ##### !whitelist username
 This command will prevent a user from being banned by the bot and also send the unban command for convenience. 
+
+##### !whitelist all
+This special command will whitelist everyone in your chat. Use this if you are sure there are no spam bots. This will protect your regulars from bans if used pre-emptively 
 
 ##### !bld YYYY-MM-DD
 Blacklists a date manually. IMPORTANT: This date is in GMT. BTTV shows the date based on your LOCAL time zone.
