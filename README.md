@@ -25,6 +25,7 @@ Windows users without git download the zip here:
 https://github.com/Leo675/twitch-botbuster/archive/master.zip
 
 Users with git, clone the repo.
+
 ```git clone https://github.com/Leo675/twitch-botbuster```
 
 # Configuration
