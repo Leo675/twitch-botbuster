@@ -5,14 +5,18 @@
 import socket
 import time
 import re
-import requests
 import json
 import sqlite3
 import datetime
 from threading import Thread
 import configparser
 
-
+try:
+    import requests
+except:
+    print('Failed to load requests module. Try running "pip install requests"\n If command pip is not found, you may need to install it or use easy_install.')
+    exit(0)
+    
 # Function for threaded asynchronous functions decorator @async
 def async(func):
     from functools import wraps
