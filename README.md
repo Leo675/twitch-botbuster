@@ -12,13 +12,19 @@ https://www.python.org/downloads/
 
 The only nonstandard module is ```requests```
 
-If some of these don't come standard in your python installation, they can be installed by opening cmd or terminal and typing:
+To install, open cmd.exe and run one of the following commands (or on *nix connect to ssh/open terminal)
 
 ```pip install requests```
-or
-```pip -r install requirements.txt```
 
-Download the botbuster.py and open with a text editor to configure authentication and channel.
+or
+
+```python -m pip install requests```
+
+Windows users without git download archive here here:
+
+https://github.com/Leo675/twitch-botbuster/archive/master.zip
+
+Users with git, clone the repo.
 
 # Configuration
 
