@@ -6,16 +6,17 @@ I'm willing to run the bot myself in your channel if you need help. It would hel
 
 # Installation
 
-Requires python. I know it will work with 3.5 and 3.4. I think some of the dictionary handling is incompatible with 2.7.
-Tested on Windows, should work on *NIX environments too.
+Requires python. I know it will work with 3.5 and 3.4.
 
 https://www.python.org/downloads/
 
-Modules used: socket, time, re, requests, json
+The only nonstandard module is ```requests```
 
 If some of these don't come standard in your python installation, they can be installed by opening cmd or terminal and typing:
 
-```pip install requests json```
+```pip install requests```
+or
+```pip -r install requirements.txt```
 
 Download the botbuster.py and open with a text editor to configure authentication and channel.
 
