@@ -1,6 +1,6 @@
 #! python3
 # -*- coding: utf-8 -*-
-# Author: Leo675
+# Author: Daytona_675
 
 import socket
 import time
@@ -8,7 +8,9 @@ import re
 import requests
 import json
 import sqlite3
+import datetime
 from threading import Thread
+import configparser
 
 
 # Function for threaded asynchronous functions decorator @async
@@ -23,37 +25,25 @@ def async(func):
     return async_func
 
 class BotBuster():
-    # The twitch user which will be acting as your bot
-    chat_user = 'daybot_675'
-
-    # The oauth password for the twitch user which will be operating
-    # Obtain this value by visiting this page while logged in as your bot user: http://www.twitchapps.com/tmi/
-    # example: 
-    chat_pass = 'oauth:'
-
-    # The channel the bot will be operating in (your channel's name)
-    chat_chan = 'daytona_675'
+    # Gets config.ini settings
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    p_threshold = int(config['DEFAULT']['p_threshold'])
+    chat_user = config['DEFAULT']['chat_user']
+    chat_pass = config['DEFAULT']['chat_pass']
+    chat_chan = config['DEFAULT']['chat_chan']
+    client_id = config['DEFAULT']['client_id']
+    punishment = config['DEFAULT']['punishment']
+    timeout_duration = int(config['DEFAULT']['timeout_duration'])
+    chat_host = config['DEFAULT']['chat_host']
+    chat_port = int(config['DEFAULT']['chat_port'])
     
-    # Client ID for api requests, this is the general ID of the web client
-    client_id = "jzkbprff40iqj646a697cyrvl0zt2m6"
-    
-    # Punishment method; change to timeout (or any word other than ban) to make it timeout instead of ban
-    punishment = 'timeout'
-
-    # If using timeout punishment, duration of the timeout
-    timeout_duration = 3600
-
-    # Twitch IRC server info: the host and port should not need to be changed
-    chat_host = "irc.chat.twitch.tv"
-    chat_port = 6667
-
     # Persistent database file. Makes file name based on chat channel. Only change to make a combined database for multiple channels.
     database_name = '{}_database.sqlite'.format(chat_chan)
-    
     banned_users = []
     whitelisted_users = []
     banned_dates = []
-    
+    timedout_users = {}
     #Maps indexes to names, QoL, don't touch unless changing data structure of database
     user_name = 0
     creation_date = 1
@@ -90,7 +80,7 @@ class BotBuster():
             self.time_stamp = 3
 
             create_table = 'create table if not exists {} ( {}, {}, {}, {} )'
-            epoch_time_stamp = "time_stamp timestamp default ( strftime('%s', 'now') )"
+            epoch_time_stamp = "time_stamp integer"
 
             create_user_table = create_table.format('user_table', 'user_name id text primary key', 'creation_date text', 'user_status integer', epoch_time_stamp)
 
@@ -142,22 +132,32 @@ class BotBuster():
         print(rows)
         for row in rows:
             self.buster_database.update({row[self.user_name] : [row[self.creation_date], row[self.user_status], row[self.time_stamp]]})
-            if row[self.user_status] == 'whitelisted':
+            if row[self.user_status] == 2: #whitelisted
                 print('adding {} to whitelist'.format(row[self.user_name]))
                 self.whitelisted_users.append(row[self.user_name])
-            if row[self.user_status] == 'blacklisted':
+            if row[self.user_status] == 1: #blacklisted
                 if row[self.creation_date] not in self.banned_dates:
                     self.banned_dates.append(row[self.creation_date])
         conn.close()
         return self.buster_database
 
     def update_db(self, user, status):
+        if status == 'whitelisted':
+            status = 2
+        elif status == 'blacklisted':
+            status = 1
+        else:
+            status = 0
         ctime = int(time.time())
         print('checking date created')
         date_created = get_creation_date(user)
         print('date check finished')
-        self.buster_database.update({user : [date_created, status, ctime]})
-        sql_query = "update user_table set user_name = '{}', creation_date = '{}', user_status = '{}', time_stamp = '{}';".format(user, date_created, status, ctime)
+        try:
+            self.buster_database.update({user : [date_created, status, ctime]})
+        except:
+            return
+        sql_query = "insert or replace into user_table (user_name, creation_date, user_status, time_stamp) values ('{}','{}',{},{})".format(user, date_created, status, ctime)
+        #sql_query = "update user_table set user_name = '{}', creation_date = '{}', user_status = {}, time_stamp = {};".format(user, date_created, status, ctime)
         print('executing query: {}'.format(sql_query))
         conn = sqlite3.connect(self.database_name)
         c = conn.cursor()
@@ -177,15 +177,20 @@ class BotBuster():
                     if chatter in self.banned_users:
                         continue
                     
-                    if chatter in self.whitelisted_users:
+                    elif chatter in self.whitelisted_users:
                         continue
-                        
+                    elif chatter in self.timedout_users:
+                        if int(time.time) >= self.timedout_users[chatter]:
+                            self.punish(chatter)
+                        continue
+                    
+                    try:
+                        user_date = get_creation_date(chatter)
+                    except:
+                        continue
+                    
                     if get_creation_date(chatter) in self.banned_dates:
-                        if self.punishment == 'ban':
-                            ban(self.s, chatter)
-                            self.banned_users.append(chatter)
-                        else:
-                            self.timeout(self.s, chatter, 3600)
+                        self.punish(chatter)
 
                         print('Current number of banned users: {!s}'.format(len(self.banned_users)))
             time.sleep(15)
@@ -228,7 +233,7 @@ class BotBuster():
                     else:
                         print('failed bld')
                         self.chat(self.s, 'Error: invalid format. Use !bld YYYY-MM-DD')
-                    break
+                    return
                 
                 # Manual unlisting of a date, can also !stopbans to clear the list 
                 elif action == 'unlist_date' and user in self.admin_list:
@@ -237,48 +242,97 @@ class BotBuster():
                         self.banned_dates.remove(input.group(1))
                     else:
                         self.chat(self.s, 'Error: invalid format. !unlist YYYY-MM-DD')
-                    break
+                    return
 
                 # Automatic lookup of a user's creation date blacklisting it.
-                elif action == 'blacklist_user' and user in self.admin_list:
+                elif action == 'blacklist_user':
+                    if user not in self.admin_list:
+                        self.chat(self.s, 'Boop beep ur not a mod bruh {}'.format(user))
+                        return
                     target = re.search('^'+command+'\s*@?([\w\-]+)', msg)
-                    if target:
-                        # Makes sure the user is actually in the room to prevent erroneous bans.
-                        if target.group(1).lower() in self.chatter_list:
-                            user_date = get_creation_date(target.group(1).lower())
-                            self.chat(self.s, 'Blacklisted: {}'.format(user_date))
-                            self.banned_dates.append(user_date)
-                        else:
-                            self.chat(self.s, 'User {} not found in the room. Check spelling or try again in 15 seconds.'.format(target.group(1)))
-                    break
+                    try:
+                        target_user = target.group(1).lower()
+                    except:
+                        return
 
+                    # Makes sure the user is actually in the room to prevent erroneous bans.
+                    
+                    user_date = get_creation_date(target_user)
+                    self.punish(target_user)
+                    self.chat(self.s, 'Blacklisted: {}'.format(user_date))
+                    if user_date not in self.banned_dates:
+                        self.banned_dates.append(user_date)
+                    for i in range(1,self.p_threshold + 1):
+                        future = user_date + i
+                        past = user_date - i
+                        if future not in self.banned_dates:
+                            self.banned_dates.append(future)
+                        if past not in self.banned_dates:
+                            self.banned_dates.append(past)    
+                    try:
+                        self.whitelisted_users.remove(target_user)
+                    except:
+                        pass
+                    return
                 # Stops bans and clears blacklist
                 elif action == 'stop_banning' and user in self.admin_list:
                     self.mitigation_active = 0
                     self.banned_dates = []
                     self.chat(self.s, 'Turning off chat mitigation.')
-                    break
+                    return
 
                 # Starts banning users
                 elif action == 'start_banning' and user in self.admin_list:
                     self.mitigation_active = 1
                     self.chat(self.s, 'Turning on chat mitigation ═══█❚')
-                    break
+                    return
 
                 # Unbans and prevents future banning of the user
                 elif action == 'whitelist_user' and user in self.admin_list:
                     target = re.search('^'+command+'\s*@?([\w\-]+)', msg)
-                    if target:
-                        #if target.group(1) == 'all':
-                        self.chat(self.s, 'Whitelisting user: {}'.format(target.group(1)))
-                        self.update_db(user, 'whitelisted')
-                        self.whitelisted_users.append(target.group(1).lower())
-                        self.unban(self.s, target.group(1).lower())
-                    break
+                    try:
+                        target_user = target.group(1).lower()
+                    except:
+                        return
+                    if target_user == 'all':
+                        for target_user in self.chatter_list:
+                            self.whitelist(target_user)
+                        return
+                    self.whitelist_user(target_user)
+                    return
                 elif action == 'show_whitelist' and user in self.admin_list:
                     self.chat(self.s, repr(self.whitelisted_users))
-                    break
-            
+                    return
+                    
+    def whitelist_user(self, target_user):
+        if target_user in self.whitelisted_users:
+            self.chat(self.s, 'User {} is already whitelisted'.format(target_user))
+            return
+        self.chat(self.s, 'Whitelisting user: {}'.format(target_user))
+        self.update_db(target_user, 'whitelisted')
+        self.whitelisted_users.append(target_user)
+        self.unban(self.s, target_user)
+        try:
+            del self.timedout_users[target_user]
+        except:
+            pass
+        try:
+            self.banned_users.remove(target_user)
+        except:
+            pass
+        return
+        
+    # Punishes chatter with specified method
+    def punish(self, chatter):
+        if self.punishment == 'ban':
+            self.ban(self.s, chatter)
+            self.banned_users.append(chatter)
+            print('Banning {}'.format(chatter))
+        else:
+            to_time = int(time.time())
+            self.timedout_users.update({chatter : to_time + self.timeout_duration})
+            self.timeout(self.s, chatter, self.timeout_duration)
+            print('Timing Out {}'.format(chatter))    
     # Initial IRC socket connection and authentication
     def connect_chat(self):
         s = socket.socket()
@@ -310,18 +364,6 @@ class BotBuster():
     # Times users out
     def timeout(self, sock, user, secs):
         self.chat(sock, "/timeout {} {}".format(user, secs))
-
-        
-    # Punishes chatter with specified method
-    def punish(self, chatter):
-        if self.punishment == 'ban':
-            ban(s, chatter)
-            self.banned_users.append(chatter)
-            print('Banning {}'.format(chatter))
-        else:
-            self.timeout(s, chatter, self.timeout_duration)
-            print('Timing Out {}'.format(chatter))
-
         
 # Function for returning the user's creation date
 def get_creation_date(user):
@@ -342,7 +384,12 @@ def get_creation_date(user):
                 '([\d]{4}-[\d]{2}-[\d]{2})',
                 json.loads(r.text)['created_at']
             )
-            return date.group(1)
+            epoch = datetime.datetime.strptime("{}".format(date.group(1)) , "%Y-%m-%d")
+            epoch = int(time.mktime(epoch.timetuple()) / 3600)
+            # except:
+                # print('Failed to get time')
+                # return
+            return epoch
 
        
 if __name__ == '__main__':
