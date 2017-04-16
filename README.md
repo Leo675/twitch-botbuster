@@ -6,7 +6,7 @@ I'm willing to run the bot myself in your channel if you need help. It would hel
 
 # Installation
 
-Requires python. I know it will work with 3.5 and 3.4.
+Requires python. Tested with 3.5 and 3.4.
 
 https://www.python.org/downloads/
 
