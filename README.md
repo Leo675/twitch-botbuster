@@ -1,5 +1,5 @@
 # botbuster.py
-Automated banning of twitch chat bots based on account creation date. I made this because a friend of mine was afraid to stream because of being attacked by chat bots. Hopefully this helps others who get attacked too. DM me on twitter @IDSninja or stop by my twitch channel for help https://twitch.tv/daytona_675
+Automated banning of twitch chat bots based on account creation date. I made this because a friend of mine was afraid to stream because of being attacked by chat bots. Hopefully this helps others who get attacked too. DM me on twitter @IDSninja.
 
 I'm willing to run the bot myself in your channel if you need help. It would help me improve the protective measures.
 
