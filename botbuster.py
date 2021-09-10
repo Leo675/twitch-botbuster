@@ -18,7 +18,7 @@ except:
     exit(0)
     
 # Function for threaded asynchronous functions decorator @async
-def async(func):
+def _async(func):
     from functools import wraps
     
     @wraps(func)
@@ -171,7 +171,7 @@ class BotBuster():
     
     
     # Thread for watching and banning chatters
-    @async
+    @_async
     def watch_chatters(self):
         while 1:
             # Gets the list of chatters in the room, needs to run while mitigation is off
@@ -200,7 +200,7 @@ class BotBuster():
             time.sleep(15)
 
     # Thread for reading chat and watching for user commands
-    @async
+    @_async
     def read_chat(self):    
         # Starts infinite loop listening to the IRC server
         self.connect_chat()
@@ -220,7 +220,7 @@ class BotBuster():
             if chat_object:
                 self.process_chat(chat_object)
 
-    @async
+    @_async
     def process_chat(self, chat_object):
         user = chat_object.group(1)
         msg = chat_object.group(2)
